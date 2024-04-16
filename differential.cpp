@@ -98,8 +98,9 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;                    // port
 #include <WiFi.h>
 #include <PubSubClient.h>
 
-const char* ssid = "iPhone";
-const char* password = "derin2001";
+const char* ssid = "HakanAk";
+const char* password = "pkrt3862";
+bool control = false;
 
 const char* mqtt_server = "18.169.68.55";
 const int mqtt_port = 1883;
@@ -129,13 +130,26 @@ void setup_wifi() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
+//  Serial.print("Message arrived [");
+//  Serial.print(topic);
+//  Serial.print("] ");
+//  for (int i = 0; i < length; i++) {
+//    Serial.print((char)payload[i]);
+//  }
+//  Serial.println();
+
+  String message = "";
   for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
+    message += (char)payload[i];
   }
-  Serial.println();
+  if (message.equals("Start")) {
+    control = true;
+    Serial.println("Start signal received.");
+  } else if (message.equals("Stop")) {
+    control = false;
+    Serial.println("Stop signal received.");
+  }
+  
 
 }
 
@@ -146,7 +160,8 @@ void reconnect() {
     // Attempt to connect
     if (mqttClient.connect("ESP32Client", mqtt_user, mqtt_password)) {
       Serial.println("connected");
-      // Once connected, subscribe to the topic
+      mqttClient.subscribe("control"); 
+
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
@@ -166,7 +181,7 @@ spi.begin();
 init_cardreader();
 init_frequencyMeter();                                                 // Initialize Frequency Meter
 init_sensors();
-peakDetection.begin(10, 1, 0.3);
+  peakDetection.begin(48, 3, 0.6);               // sets the lag,F threshold and influence
 
 
 //WiFiManager wifiManager;
@@ -197,6 +212,8 @@ peakDetection.begin(10, 1, 0.3);
   setup_wifi();
   mqttClient.setServer(mqtt_server, mqtt_port);
   mqttClient.setCallback(callback);
+  mqttClient.connect("ESP32Client", mqtt_user, mqtt_password);
+  mqttClient.subscribe("control"); 
 
 }
 
@@ -259,7 +276,7 @@ void init_sensors()
 }
 
 #define WINDOW_SIZE 20  // Define the size of the window
-#define BUFFER_SIZE 50
+#define BUFFER_SIZE 60
 
 float calculateMovingAverage(float dataArray[], int dataSize) {
   float sum = 0;
@@ -284,7 +301,13 @@ bool isHoldingBreath = false; // Initialize breath-holding state
 int lastValue = 0;         // Previous reading
 int filteredValue = 0;         // Previous reading
 std::vector<int> fifoBuffer;
-int lastfreq = 0;         // Previous reading
+double lastfreq = 0;         // Previous reading
+double lastdiff=0;
+
+unsigned long lastPeakTime = 0; // Variable to store the time of the last peak
+unsigned long lastPeakTime2 = 0; // Variable to store the time of the last peak
+
+unsigned long cooldownPeriod = 1000; // Cooldown period in milliseconds (adjust as needed)
 
 void read_data()
 {
@@ -316,16 +339,16 @@ void read_data()
 
 
     
-  if (abs(-frequency_0 - lastValue) <= 20) {
+  if (abs(-frequency_0 - lastValue) <= 15) {
 //      filteredValue = 0.1 * (-frequency_0) + (1 - 0.1) * filteredValue;
       peakDetection.add(-frequency_0);                     // adds a new data point
       double filtered = peakDetection.getFilt();   // moving average
-      Serial.println(filtered);
       
 //    Serial.println(count);                    // print moving average
     
     currentIndex = (currentIndex + 1) % BUFFER_SIZE;
     int diff = (filtered - lastfreq) > 0 ? 1 : 0;
+//    Serial.println(diff);
     lastfreq = filtered;
     averagedFrequencyReadings[currentIndex] = filtered;
     fifoBuffer.push_back(diff); 
@@ -338,32 +361,76 @@ void read_data()
   float *maxElement = std::max_element(averagedFrequencyReadings, averagedFrequencyReadings + BUFFER_SIZE);
   float *minElement = std::min_element(averagedFrequencyReadings, averagedFrequencyReadings + BUFFER_SIZE);
   float difference = *maxElement - *minElement;
-//  Serial.println(difference); 
+  
+    
+  if (difference < 4) {
 
-  if (difference < 2.5) {
-//    Serial.println("holding breath");
 
     if (!isHoldingBreath) {
-//        Serial.println("Starting holding breath");
+        Serial.println("Starting holding breath");
         isHoldingBreath = true;
+//        char message[100]; 
+//        snprintf(message, sizeof(message), "Start Holding Breath");
+//        mqttClient.publish("iot", message);
+        unsigned long currentMillis = millis(); // Get current time in milliseconds
+        char message[100]; 
+        sprintf(message, "Start holding breath - Timestamp: %lu", currentMillis); // Format message with timestamp 
+        mqttClient.publish("iot", message); // Publish message with timestamp
     } 
   } else {
       if (isHoldingBreath) {
-//          Serial.println("Ending holding breath");
-          isHoldingBreath = false;
+        Serial.println("Ending holding breath");
+        isHoldingBreath = false;
+        unsigned long currentMillis = millis(); // Get current time in milliseconds
+        char message[100]; 
+        sprintf(message, "Stop holding breath - Timestamp: %lu", currentMillis); // Format message with timestamp 
+        mqttClient.publish("iot", message); // Publish message with timestamp
       }
   }
 
-int sum1 = std::accumulate(fifoBuffer.begin(), fifoBuffer.begin() + 25, 0);
-int sum2 = std::accumulate(fifoBuffer.begin()+26, fifoBuffer.begin() + 50, 0);
 
-if (((sum1 < 5) && (sum2 > 20)) || ((sum1 > 20) && (sum2 < 5))){
-    Serial.println("Peak");
-}
 
-if (fifoBuffer.size() > 50) {
-    fifoBuffer.erase(fifoBuffer.begin());
-}
+
+        int sum1=0;
+      int sum2=0;
+      for(int i=0; i<10; i++){
+        sum1 += fifoBuffer[i];
+        sum2 += fifoBuffer[i+10];
+      }
+
+    //if( diff==1 && lastdiff==0){
+    //  Serial.println("Peak");
+    //}
+    lastdiff= diff;
+    //Serial.print("sum1: ");
+    //Serial.print(sum1);
+    //Serial.print(", sum2: ");
+    //Serial.println(sum2);
+        if (sum1 < 1 && sum2 > 1 && (millis() - lastPeakTime) > cooldownPeriod) {
+            Serial.println("Minima");
+            lastPeakTime = millis(); // Update last peak time        
+            char message[100]; 
+            sprintf(message, "Minima - Timestamp: %lu", lastPeakTime); // Format message with timestamp
+            mqttClient.publish("iot", message); // Publish message with timestamp
+            fifoBuffer.clear(); // Erase all elements from the vector
+    //        char message[100]; 
+    //        snprintf(message, sizeof(message), "Minima");
+    //        mqttClient.publish("iot", "Minima");
+        }
+    
+        if (sum2 < 1 && sum1 > 1 && (millis() - lastPeakTime2) > cooldownPeriod) {
+            Serial.println("Maxima");
+            lastPeakTime2 = millis(); // Update last peak time
+            char message[100]; 
+            sprintf(message, "Maxima - Timestamp: %lu", lastPeakTime2); // Format message with timestamp
+            mqttClient.publish("iot", message); // Publish message with timestamp
+            fifoBuffer.clear(); // Erase all elements from the vector
+    //        mqttClient.publish("iot", "Maxima");
+        }
+    
+    if (fifoBuffer.size() > 20) {
+        fifoBuffer.erase(fifoBuffer.begin());
+    }
 //Serial.println(difference);
 
 // if ((difference > 8)) {
@@ -584,24 +651,25 @@ void init_frequencyMeter ()
 //---------------------------------------------------------------------------------
 void loop()
 {
-  if (flag == true)                                                     // If count has ended
-  {
-    flag = false;                                                       // change flag to disable print
-    print_counter++;
-    if (print_counter>=print_every)
+  if (control == true){
+    if (flag == true)                                                     // If count has ended
     {
-      print_counter = 0;
-      write_data();
-      
+      flag = false;                                                       // change flag to disable print
+      print_counter++;
+      if (print_counter>=print_every)
+      {
+        print_counter = 0;
+        write_data();
+        
+      }
     }
+    
+    delay(1); // units are millisecs
   }
-
-//  if (!mqttClient.connected()) {
-//    reconnect();
-//  }
-//  mqttClient.loop();
-
-  delay(1); // units are millisecs
+    if (!mqttClient.connected()) {
+      reconnect();
+    }
+    mqttClient.loop();
 }
 
 
