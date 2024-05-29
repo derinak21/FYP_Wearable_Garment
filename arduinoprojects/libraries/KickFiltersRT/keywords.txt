@@ -1,0 +1,40 @@
+#######################################
+# Syntax Coloring Map for KickFiltersRT
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+KickFiltersRT	KEYWORD1
+
+
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+inithighpass	KEYWORD2
+highpass	KEYWORD2
+
+initlowpass	KEYWORD2
+lowpass	KEYWORD2
+
+initmovingAverage	KEYWORD2
+movingAverage	KEYWORD2
+
+initnotch	KEYWORD2
+notch	KEYWORD2
+
+initmedian	KEYWORD2
+median	KEYWORD2
+
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
+
+KickFiltersRT_MAX_MOVING_AVERAGE_ORDER	LITERAL1
+

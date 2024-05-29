@@ -1,0 +1,49 @@
+#######################################
+# Syntax Coloring Map for KickMath
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+KickMath	KEYWORD1
+
+
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+
+calcSqrt	KEYWORD2
+calcMagnitude	KEYWORD2
+
+find	KEYWORD2
+
+getAbsMax	KEYWORD2
+getMax	KEYWORD2
+getAbsMin	KEYWORD2
+getMin	KEYWORD2
+getSum	KEYWORD2
+
+getMaxIndex	KEYWORD2
+getMinIndex	KEYWORD2
+
+calcAverage	KEYWORD2
+calcMedian	KEYWORD2
+calcStDev	KEYWORD2
+
+calcPeaktoPeak	KEYWORD2
+calcRMS	KEYWORD2
+calcDerivative	KEYWORD2
+calcCentroid	KEYWORD2
+
+tTest	KEYWORD2
+
+corr	KEYWORD2
+
+
+
+#######################################
+# Constants (LITERAL1)
+#######################################
